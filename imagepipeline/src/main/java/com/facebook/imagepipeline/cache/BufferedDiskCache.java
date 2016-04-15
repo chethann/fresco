@@ -9,14 +9,10 @@
 
 package com.facebook.imagepipeline.cache;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicBoolean;
-
+import com.facebook.binaryresource.BinaryResource;
+import com.facebook.cache.common.CacheKey;
+import com.facebook.cache.common.WriterCallback;
+import com.facebook.cache.disk.FileCache;
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.logging.FLog;
 import com.facebook.common.references.CloseableReference;
@@ -24,10 +20,14 @@ import com.facebook.imagepipeline.image.EncodedImage;
 import com.facebook.imagepipeline.memory.PooledByteBuffer;
 import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
 import com.facebook.imagepipeline.memory.PooledByteStreams;
-import com.facebook.binaryresource.BinaryResource;
-import com.facebook.cache.common.CacheKey;
-import com.facebook.cache.common.WriterCallback;
-import com.facebook.cache.disk.FileCache;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import bolts.Task;
 
@@ -121,6 +121,32 @@ public class BufferedDiskCache {
           "Failed to schedule disk-cache read for %s",
           key.toString());
       return Task.forError(exception);
+    }
+  }
+
+  /**
+   * Performs disk cache check synchronously.
+   * @param key
+   * @return true if the key is found in disk cache else false
+   */
+  public boolean syncDiskCheck(final CacheKey key){
+    if(containsSync(key)){
+      return true;
+    }
+    EncodedImage result = mStagingArea.get(key);
+    if (result != null) {
+      result.close();
+      FLog.v(TAG, "Found image for %s in staging area", key.toString());
+      mImageCacheStatsTracker.onStagingAreaHit();
+      return true;
+    } else {
+      FLog.v(TAG, "Did not find image for %s in staging area", key.toString());
+      mImageCacheStatsTracker.onStagingAreaMiss();
+      try {
+        return mFileCache.hasKey(key);
+      } catch (Exception exception) {
+        return false;
+      }
     }
   }
 

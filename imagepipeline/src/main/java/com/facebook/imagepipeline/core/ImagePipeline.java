@@ -9,15 +9,9 @@
 
 package com.facebook.imagepipeline.core;
 
-import javax.annotation.concurrent.ThreadSafe;
-
-import java.lang.Exception;
-import java.util.Set;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.atomic.AtomicLong;
-
 import android.net.Uri;
 
+import com.android.internal.util.Predicate;
 import com.facebook.cache.common.CacheKey;
 import com.facebook.common.internal.Objects;
 import com.facebook.common.internal.Preconditions;
@@ -28,26 +22,29 @@ import com.facebook.datasource.DataSource;
 import com.facebook.datasource.DataSources;
 import com.facebook.datasource.SimpleDataSource;
 import com.facebook.imagepipeline.cache.BufferedDiskCache;
-import com.facebook.imagepipeline.cache.MemoryCache;
 import com.facebook.imagepipeline.cache.CacheKeyFactory;
+import com.facebook.imagepipeline.cache.MemoryCache;
 import com.facebook.imagepipeline.common.Priority;
 import com.facebook.imagepipeline.datasource.CloseableProducerToDataSourceAdapter;
 import com.facebook.imagepipeline.datasource.ProducerToDataSourceAdapter;
 import com.facebook.imagepipeline.image.CloseableImage;
+import com.facebook.imagepipeline.listener.ForwardingRequestListener;
+import com.facebook.imagepipeline.listener.RequestListener;
 import com.facebook.imagepipeline.memory.PooledByteBuffer;
 import com.facebook.imagepipeline.producers.Producer;
 import com.facebook.imagepipeline.producers.SettableProducerContext;
-import com.facebook.imagepipeline.listener.ForwardingRequestListener;
+import com.facebook.imagepipeline.producers.ThreadHandoffProducerQueue;
 import com.facebook.imagepipeline.request.ImageRequest;
-import com.facebook.imagepipeline.listener.RequestListener;
-
-import bolts.Continuation;
-import com.android.internal.util.Predicate;
-
 import com.facebook.imagepipeline.request.ImageRequestBuilder;
 
+import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicLong;
+
+import javax.annotation.concurrent.ThreadSafe;
+
+import bolts.Continuation;
 import bolts.Task;
-import com.facebook.imagepipeline.producers.ThreadHandoffProducerQueue;
 
 /**
  * The entry point for the image pipeline.
@@ -255,10 +252,10 @@ public class ImagePipeline {
       Producer<Void> producerSequence =
           mProducerSequenceFactory.getDecodedImagePrefetchProducerSequence(imageRequest);
       return submitPrefetchRequest(
-          producerSequence,
-          imageRequest,
-          ImageRequest.RequestLevel.FULL_FETCH,
-          callerContext);
+              producerSequence,
+              imageRequest,
+              ImageRequest.RequestLevel.FULL_FETCH,
+              callerContext);
     } catch (Exception exception) {
       return DataSources.immediateFailedDataSource(exception);
     }
@@ -279,10 +276,10 @@ public class ImagePipeline {
       Producer<Void> producerSequence =
           mProducerSequenceFactory.getEncodedImagePrefetchProducerSequence(imageRequest);
       return submitPrefetchRequest(
-          producerSequence,
-          imageRequest,
-          ImageRequest.RequestLevel.FULL_FETCH,
-          callerContext);
+              producerSequence,
+              imageRequest,
+              ImageRequest.RequestLevel.FULL_FETCH,
+              callerContext);
     } catch (Exception exception) {
       return DataSources.immediateFailedDataSource(exception);
     }
@@ -390,6 +387,27 @@ public class ImagePipeline {
   }
 
   /**
+   *
+   * @param uri the uri for the image to be looked up.
+   * @return true if the image was found in the disk cache, false otherwise.
+   */
+  public boolean isInDiskCacheSync(final Uri uri) {
+    return isInDiskCacheSync(ImageRequest.fromUri(uri));
+  }
+
+  /**
+   * Performs disk cache check synchronously. It is not recommended to use this
+   * unless u know what exactly you are doing. Disk cache check is a costly operation,
+   * doing this on UI thread will block the thread until it gets the response.
+   * @param imageRequest the imageRequest for the image to be looked up.
+   * @return true if the image was found in the disk cache, false otherwise.
+   */
+  public boolean isInDiskCacheSync(final ImageRequest imageRequest) {
+    final CacheKey cacheKey = mCacheKeyFactory.getEncodedCacheKey(imageRequest);
+    return mMainBufferedDiskCache.syncDiskCheck(cacheKey);
+  }
+
+  /**
    * Returns whether the image is stored in the disk cache.
    *
    * <p>If you have supplied your own cache key factory when configuring the pipeline, this method
@@ -424,13 +442,13 @@ public class ImagePipeline {
               }
             })
         .continueWith(
-            new Continuation<Boolean, Void>() {
-              @Override
-              public Void then(Task<Boolean> task) throws Exception {
-                dataSource.setResult(!task.isCancelled() && !task.isFaulted() && task.getResult());
-                return null;
-              }
-            });
+                new Continuation<Boolean, Void>() {
+                    @Override
+                    public Void then(Task<Boolean> task) throws Exception {
+                        dataSource.setResult(!task.isCancelled() && !task.isFaulted() && task.getResult());
+                        return null;
+                    }
+                });
     return dataSource;
   }
 
