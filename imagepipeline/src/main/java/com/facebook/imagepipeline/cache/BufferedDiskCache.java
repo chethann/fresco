@@ -9,18 +9,6 @@
 
 package com.facebook.imagepipeline.cache;
 
-import com.facebook.binaryresource.BinaryResource;
-import com.facebook.cache.common.CacheKey;
-import com.facebook.cache.common.WriterCallback;
-import com.facebook.cache.disk.FileCache;
-import com.facebook.common.internal.Preconditions;
-import com.facebook.common.logging.FLog;
-import com.facebook.common.references.CloseableReference;
-import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
-import com.facebook.imagepipeline.memory.PooledByteStreams;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -28,6 +16,18 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.facebook.common.internal.Preconditions;
+import com.facebook.common.logging.FLog;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.memory.PooledByteBuffer;
+import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
+import com.facebook.imagepipeline.memory.PooledByteStreams;
+import com.facebook.binaryresource.BinaryResource;
+import com.facebook.cache.common.CacheKey;
+import com.facebook.cache.common.WriterCallback;
+import com.facebook.cache.disk.FileCache;
 
 import bolts.Task;
 
